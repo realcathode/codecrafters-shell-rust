@@ -1,6 +1,8 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::process;
+use std::env;
+use std::path::Path;
 
 const BUILTIN: [&str; 3] = ["echo", "exit", "type"];
 
@@ -40,20 +42,37 @@ fn sh_type(args: Vec<&str>) {
         match args.get(i) {
             Some(&s) => {
                 if BUILTIN.contains(&s) {
-                    print!("{} is a shell builtin", s);
-                }else {
-                    print!("{}: not found", s);
+                    println!("{} is a shell builtin", s);
+                } else if let Ok(path_env) = env::var("PATH") {
+                    let paths: Vec<&str> = path_env.trim().split(':').collect();
+                    let mut found = false;
+
+                    for path in paths {
+                        let full_path = format!("{}/{}", path, s);
+                        if Path::new(&full_path).exists() {
+                            println!("{} is {}", s, full_path);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if !found {
+                        println!("{}: not found", s);
+                    }
+                } else {
+                    println!("PATH environment variable is not set.");
                 }
             },
-            None => {
-            },
+            None => {}
         }
+
         if i != args.len() - 1 {
             print!(" ");
         }
     }
-    println!("");
+    // println!("");
 }
+
 
 fn main() {
     let stdin = io::stdin();
