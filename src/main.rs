@@ -1,10 +1,26 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process;
 use std::env;
 use std::path::Path;
+use std::process::Command;
 
 const BUILTIN: [&str; 3] = ["echo", "exit", "type"];
+
+fn find_executable(s: &str) -> Option<PathBuf> {
+    if let Ok(path_env) = env::var("PATH") {
+        let paths: Vec<&str> = path_env.trim().split(":").collect();
+        for path in paths {
+            let full_path = Path::new(path).join(s);
+            if full_path.exists() && full_path.is_file() {
+                return Some(full_path);
+            }
+        }
+    }
+    None
+}
+
 
 fn sh_exit(args: Vec<&str>) {
     match args.get(1) {
@@ -88,7 +104,6 @@ fn main() {
         }
         
         let args: Vec<&str> = input.trim().split_ascii_whitespace().collect();
-
         
         match args[0].trim() {
             "exit" => {
@@ -101,7 +116,20 @@ fn main() {
                 sh_type(args);
             }
             _ => {
-                println!("{}: command not found", input.trim());    
+                if let Some(path) = find_executable(args[0]) {
+                    if let Some(executable_name) = Path::new(&path)
+                        .file_name()
+                        .and_then(|os_str| os_str.to_str()) {
+                        Command::new(executable_name)
+                            .args(&args[1..])
+                            .status()
+                            .expect("failed to execute process");
+                    } else {
+                        println!("could not extract the executable name.");
+                    }
+                } else {
+                    println!("{}: command not found", args[0]);
+                }
             }
         }   
         io::stdout().flush().unwrap();
