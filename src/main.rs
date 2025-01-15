@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
-const BUILTIN: [&str; 3] = ["echo", "exit", "type"];
+const BUILTIN: [&str; 4] = ["echo", "exit", "type", "pwd"];
 
 fn find_executable(command: &str) -> Option<PathBuf> {
     env::var("PATH")
@@ -36,9 +36,18 @@ fn sh_type(args: &[&str]) {
     }
 }
 
+fn sh_pwd() {
+    match env::current_dir() {
+        Ok(v) => println!("{}", v.display()),
+        Err(e) => println!("{}", e),
+    }
+}
+
 fn execute_command(command: &str, args: &[&str]) {
     if let Some(path) = find_executable(command) {
-        if let Err(e) = Command::new(path).args(args).status() {
+        let binary_name = Path::new(&path).file_name().unwrap().to_str().unwrap();
+        
+        if let Err(e) = Command::new(binary_name).args(args).status() {
             eprintln!("Error executing {}: {}", command, e);
         }
     } else {
@@ -67,6 +76,7 @@ fn main() {
             "exit" => sh_exit(&args),
             "echo" => sh_echo(&args),
             "type" => sh_type(&args),
+            "pwd" => sh_pwd(),
             command => execute_command(command, &args[1..]),
         }
     }
