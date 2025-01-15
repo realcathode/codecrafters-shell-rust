@@ -1,137 +1,73 @@
-#[allow(unused_imports)]
-use std::io::{self, Write};
-use std::path::PathBuf;
-use std::process;
 use std::env;
-use std::path::Path;
-use std::process::Command;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::process::{self, Command};
 
 const BUILTIN: [&str; 3] = ["echo", "exit", "type"];
 
-fn find_executable(s: &str) -> Option<PathBuf> {
-    if let Ok(path_env) = env::var("PATH") {
-        let paths: Vec<&str> = path_env.trim().split(":").collect();
-        for path in paths {
-            let full_path = Path::new(path).join(s);
-            if full_path.exists() && full_path.is_file() {
-                return Some(full_path);
-            }
-        }
-    }
-    None
+fn find_executable(command: &str) -> Option<PathBuf> {
+    env::var("PATH")
+        .ok()?
+        .split(':')
+        .map(Path::new)
+        .map(|path| path.join(command))
+        .find(|path| path.exists() && path.is_file())
 }
 
+fn sh_exit(args: &[&str]) {
+    let code = args.get(1).and_then(|s| s.parse::<i32>().ok()).unwrap_or(0);
+    process::exit(code);
+}
 
-fn sh_exit(args: Vec<&str>) {
-    match args.get(1) {
-        Some(&v) => match v.parse::<i32>() {
-            Ok(code) => {
-                process::exit(code);
-            },
-            Err(_) => {
-                process::exit(1);
-            }
-        },
-        None => process::exit(0),
+fn sh_echo(args: &[&str]) {
+    let output = args.iter().skip(1).cloned().collect::<Vec<_>>().join(" ");
+    println!("{}", output);
+}
+
+fn sh_type(args: &[&str]) {
+    for &arg in args.iter().skip(1) {
+        if BUILTIN.contains(&arg) {
+            println!("{} is a shell builtin", arg);
+        } else if let Some(path) = find_executable(arg) {
+            println!("{} is {}", arg, path.display());
+        } else {
+            println!("{}: not found", arg);
+        }
     }
 }
 
-fn sh_echo(args: Vec<&str>) {
-    for i in 1..args.len() {
-        match args.get(i) {
-            Some(&s) => {
-                print!("{}", s);
-            },
-            None => {
-                println!("args[{}] out of bounds", i);
-            }
+fn execute_command(command: &str, args: &[&str]) {
+    if let Some(path) = find_executable(command) {
+        if let Err(e) = Command::new(path).args(args).status() {
+            eprintln!("Error executing {}: {}", command, e);
         }
-        if i != args.len() - 1 {
-            print!(" ");
-        }
+    } else {
+        println!("{}: command not found", command);
     }
-    println!("");
 }
-
-fn sh_type(args: Vec<&str>) {
-    for i in 1..args.len() {
-        match args.get(i) {
-            Some(&s) => {
-                if BUILTIN.contains(&s) {
-                    println!("{} is a shell builtin", s);
-                } else if let Ok(path_env) = env::var("PATH") {
-                    let paths: Vec<&str> = path_env.trim().split(':').collect();
-                    let mut found = false;
-
-                    for path in paths {
-                        let full_path = format!("{}/{}", path, s);
-                        if Path::new(&full_path).exists() {
-                            println!("{} is {}", s, full_path);
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if !found {
-                        println!("{}: not found", s);
-                    }
-                } else {
-                    println!("PATH environment variable is not set.");
-                }
-            },
-            None => {}
-        }
-
-        if i != args.len() - 1 {
-            print!(" ");
-        }
-    }
-    // println!("");
-}
-
 
 fn main() {
     let stdin = io::stdin();
 
     loop {
-        let mut input = String::new();
         print!("$ ");
         io::stdout().flush().unwrap();
-    
-        stdin.read_line(&mut input).unwrap();
-        if input.trim().is_empty() {
+
+        let mut input = String::new();
+        if stdin.read_line(&mut input).is_err() || input.trim().is_empty() {
             continue;
         }
-        
-        let args: Vec<&str> = input.trim().split_ascii_whitespace().collect();
-        
-        match args[0].trim() {
-            "exit" => {
-                sh_exit(args);
-            },
-            "echo" => {
-                sh_echo(args);
-            },
-            "type" => {
-                sh_type(args);
-            }
-            _ => {
-                if let Some(path) = find_executable(args[0]) {
-                    if let Some(executable_name) = Path::new(&path)
-                        .file_name()
-                        .and_then(|os_str| os_str.to_str()) {
-                        Command::new(executable_name)
-                            .args(&args[1..])
-                            .status()
-                            .expect("failed to execute process");
-                    } else {
-                        println!("could not extract the executable name.");
-                    }
-                } else {
-                    println!("{}: command not found", args[0]);
-                }
-            }
-        }   
-        io::stdout().flush().unwrap();
+
+        let args: Vec<&str> = input.trim().split_whitespace().collect();
+        if args.is_empty() {
+            continue;
+        }
+
+        match args[0] {
+            "exit" => sh_exit(&args),
+            "echo" => sh_echo(&args),
+            "type" => sh_type(&args),
+            command => execute_command(command, &args[1..]),
+        }
     }
 }
