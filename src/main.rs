@@ -48,7 +48,8 @@ fn sh_cd(args: &[&str]) {
         return;
     }
 
-    let path = Path::new(args[1]);
+    let h_path = args[1].replace("~", &env::var("HOME").unwrap());
+    let path = Path::new(&h_path);
     if env::set_current_dir(&path).is_err() {
         println!("cd: {}: No such file or directory", path.display());
     }
