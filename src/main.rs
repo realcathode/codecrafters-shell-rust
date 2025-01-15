@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
 
-const BUILTIN: [&str; 4] = ["echo", "exit", "type", "pwd"];
+const BUILTIN: [&str; 5] = ["echo", "exit", "type", "pwd", "cd"];
 
 fn find_executable(command: &str) -> Option<PathBuf> {
     env::var("PATH")
@@ -43,6 +43,17 @@ fn sh_pwd() {
     }
 }
 
+fn sh_cd(args: &[&str]) {
+    if args.len() < 2 {
+        return;
+    }
+
+    let path = Path::new(args[1]);
+    if env::set_current_dir(&path).is_err() {
+        println!("cd: {}: No such file or directory", path.display());
+    }
+}
+
 fn execute_command(command: &str, args: &[&str]) {
     if let Some(path) = find_executable(command) {
         let binary_name = Path::new(&path).file_name().unwrap().to_str().unwrap();
@@ -77,6 +88,7 @@ fn main() {
             "echo" => sh_echo(&args),
             "type" => sh_type(&args),
             "pwd" => sh_pwd(),
+            "cd" => sh_cd(&args),
             command => execute_command(command, &args[1..]),
         }
     }
